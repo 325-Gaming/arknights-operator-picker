@@ -27,9 +27,12 @@
       <el-card shadow="never">
         <template #header><h2>本轮设置</h2></template>
         <el-form label-position="top">
-          <el-form-item label="字符串种子"><el-input v-model="seedInput" maxlength="200" placeholder="输入任意字符串" :disabled="state.history.length > 0"></el-input></el-form-item>
+          <el-form-item label="字符串种子"><el-input v-model="seedInput" maxlength="200" placeholder="输入任意字符串" :disabled="state.history.length > 0" @change="save"></el-input></el-form-item>
+          <el-form-item label="后半部分（可选）"><el-input v-model="state.seedSuffix" maxlength="200" placeholder="留空则只使用上方字符串" :disabled="state.history.length > 0" @change="save"></el-input></el-form-item>
+          <el-form-item><el-button :disabled="state.history.length > 0" @click="generateSeedSuffix">随机生成后半部分</el-button></el-form-item>
+          <el-form-item label="最终种子字符串"><el-input :model-value="effectiveSeed" type="textarea" :autosize="{ minRows: 2, maxRows: 5 }" readonly placeholder="填写上方字符串后显示"></el-input></el-form-item>
         </el-form>
-        <p class="hint">相同种子、数据和操作顺序会得到相同结果。开始抽取后种子锁定，重新开始可更换。</p>
+        <p class="hint">后半部分非空时，以“-”连接两部分；留空则不添加分隔符。相同最终种子、数据和操作顺序会得到相同结果。开始抽取后两部分均锁定，重新开始可更换。</p>
         <el-button @click="restart">重新开始</el-button>
       </el-card>
       <el-card shadow="never">

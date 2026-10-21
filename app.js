@@ -2,7 +2,7 @@
     'use strict';
     const STORAGE_KEY = 'arknights-operator-picker-v1';
     const DATA_URL = 'https://yubo.run/arknights/arknights-dictionary/operator.json';
-    const freshState = () => ({ version: 1, seed: '', filters: {}, manualMode: 'exclude', manualIds: [], count: 1, history: [], dataSignature: '' });
+    const freshState = () => ({ version: 1, seed: '', seedSuffix: '', filters: {}, manualMode: 'exclude', manualIds: [], count: 1, history: [], dataSignature: '' });
 
     Vue.createApp({
         setup() {
@@ -34,6 +34,7 @@
                 const raw = localStorage.getItem(STORAGE_KEY);
                 if (raw) {
                     const saved = JSON.parse(raw);
+                    if (saved.seedSuffix !== undefined && typeof saved.seedSuffix !== 'string') throw new Error('种子后半部分格式异常');
                     if (saved.version !== 1 || typeof saved.seed !== 'string' || !saved.filters || Array.isArray(saved.filters) || !Object.values(saved.filters).every(Array.isArray) || !Array.isArray(saved.manualIds) || !saved.manualIds.every(id => typeof id === 'string') || !['include', 'exclude'].includes(saved.manualMode) || !Number.isInteger(saved.count) || saved.count < 1 || !Array.isArray(saved.history) || !saved.history.every((batch, i) => batch.sequence === i && typeof batch.time === 'string' && Array.isArray(batch.candidateIds) && Array.isArray(batch.operators) && batch.operators.every(operator => typeof operator.id === 'string' && typeof operator.name === 'string'))) {
                         throw new Error('记录格式不兼容');
                     }
@@ -43,6 +44,17 @@
                 notice.value = '本地记录无法读取，已使用默认设置。原记录在下一次保存前保留。';
             }
             const seedInput = ref(state.seed);
+            const effectiveSeed = computed(() => state.seedSuffix ? `${seedInput.value}-${state.seedSuffix}` : seedInput.value);
+            function generateSeedSuffix() {
+                if (state.history.length) return;
+                try {
+                    const bytes = crypto.getRandomValues(new Uint8Array(12));
+                    state.seedSuffix = Array.from(bytes, value => value.toString(16).padStart(2, '0')).join('');
+                    save();
+                } catch {
+                    ElementPlus.ElMessage.warning('无法生成随机字符串，请手动填写后半部分。');
+                }
+            }
             const drawnIds = computed(() => new Set(state.history.flatMap(batch => batch.operators.map(operator => operator.id))));
             const eligible = computed(() => operators.value.filter(operator => {
                 const selected = state.manualIds.includes(operator.id);
@@ -98,7 +110,7 @@
             function draw() {
                 if (loading.value || error.value || !seedInput.value.trim()) return;
                 try {
-                    const picked = Picker.pick(seedInput.value, state.history.length, remaining.value, state.count);
+                    const picked = Picker.pick(effectiveSeed.value, state.history.length, remaining.value, state.count);
                     state.history.push({ sequence: state.history.length, time: new Date().toISOString(), dataSignature: state.dataSignature, filters: JSON.parse(JSON.stringify(state.filters)), manualMode: state.manualMode, manualIds: [...state.manualIds], candidateIds: remaining.value.map(operator => operator.id).sort(), operators: picked.map(({ id, name, rarity, job }) => ({ id, name, rarity, job })) });
                     save();
                 } catch (reason) {
@@ -121,7 +133,7 @@
             }
             onMounted(loadData);
             onMounted(() => changeTheme(PickerThemes.initialName(), false));
-            return { state, seedInput, operators, loading, error, notice, themes: PickerThemes.themes, themeName, themeLoading, themeNotice, changeTheme, filterDefinitions: Picker.filterDefinitions, eligible, remaining, drawnIds, latest, reversedHistory, optionsFor, save, loadData, draw, undo, restart, formatTime: value => new Date(value).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false }) };
+            return { state, seedInput, effectiveSeed, generateSeedSuffix, operators, loading, error, notice, themes: PickerThemes.themes, themeName, themeLoading, themeNotice, changeTheme, filterDefinitions: Picker.filterDefinitions, eligible, remaining, drawnIds, latest, reversedHistory, optionsFor, save, loadData, draw, undo, restart, formatTime: value => new Date(value).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false }) };
         },
     }).use(ElementPlus).mount('#app');
     document.getElementById('startup').remove();
