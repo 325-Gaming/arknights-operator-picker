@@ -24,16 +24,18 @@
   <el-button v-if="error && !operators.length" @click="loadData" :loading="loading">重新加载干员数据</el-button>
   <section class="layout" v-loading="loading">
     <div>
-      <el-card shadow="never">
-        <template #header><h2>本轮设置</h2></template>
+      <el-card shadow="never" :body-style="settingsExpanded ? {} : { display: 'none' }">
+        <template #header><div class="card-heading"><h2>本轮设置</h2><el-button :aria-expanded="settingsExpanded" aria-controls="round-settings" @click="settingsExpanded = !settingsExpanded">{{ settingsExpanded ? '收起' : '展开' }}</el-button></div></template>
+        <div id="round-settings">
         <el-form label-position="top">
           <el-form-item label="字符串种子"><el-input v-model="seedInput" maxlength="200" placeholder="输入任意字符串" :disabled="state.history.length > 0" @change="save"></el-input></el-form-item>
           <el-form-item label="后半部分（可选）"><el-input v-model="state.seedSuffix" maxlength="200" placeholder="留空则只使用上方字符串" :disabled="state.history.length > 0" @change="save"></el-input></el-form-item>
-          <el-form-item><el-button :disabled="state.history.length > 0" @click="generateSeedSuffix">随机生成后半部分</el-button></el-form-item>
+          <el-form-item><el-button :disabled="state.history.length > 0" @click="generateSeedSuffix">随机生成后半部分</el-button><el-button :disabled="state.history.length > 0" @click="useTodaySeedSuffix">使用今日日期</el-button></el-form-item>
           <el-form-item label="最终种子字符串"><el-input :model-value="effectiveSeed" type="textarea" :autosize="{ minRows: 2, maxRows: 5 }" readonly placeholder="填写上方字符串后显示"></el-input></el-form-item>
         </el-form>
         <p class="hint">后半部分非空时，以“-”连接两部分；留空则不添加分隔符。相同最终种子、数据和操作顺序会得到相同结果。开始抽取后两部分均锁定，重新开始可更换。</p>
         <el-button @click="restart">重新开始</el-button>
+        </div>
       </el-card>
       <el-card shadow="never">
         <template #header><h2>抽取范围</h2></template>
@@ -52,19 +54,33 @@
     <div>
       <el-card shadow="never">
         <template #header><h2>抽取干员</h2></template>
-        <div class="counts"><div><strong>{{ eligible.length }}</strong>符合范围</div><div><strong>{{ drawnIds.size }}</strong>本轮已抽</div><div><strong>{{ remaining.length }}</strong>剩余可抽</div></div>
+        <div class="counts"><div><strong>{{ eligible.length }}</strong>符合范围</div><button type="button" class="count-button" @click="showOperators('drawn')"><strong>{{ drawnIds.size }}</strong>当前已抽出</button><button type="button" class="count-button" @click="showOperators('remaining')"><strong>{{ remaining.length }}</strong>剩余候选</button></div>
         <div class="draw-controls"><el-input-number v-model="state.count" :min="1" :max="999" :precision="0" @change="save"></el-input-number><el-button type="primary" size="large" :disabled="loading || !remaining.length || !seedInput.trim()" @click="draw">抽取</el-button></div>
         <p class="hint">每位候选干员等概率。人数不足时不会抽取。</p>
-        <div v-if="latest" class="results"><div v-for="operator in latest.operators" :key="operator.id" class="operator"><strong>{{ operator.name }}</strong><span>{{ operator.rarity }} 星 · {{ operator.job }}</span></div></div>
-        <el-collapse><el-collapse-item :title="'查看剩余候选（' + remaining.length + '）'"><div class="candidate-list"><el-tag v-for="operator in remaining" :key="operator.id" effect="plain">{{ operator.name }}</el-tag><el-empty v-if="!remaining.length" description="没有可抽取的干员"></el-empty></div></el-collapse-item></el-collapse>
+        <div v-if="latest" class="results"><div v-for="operator in latest.operators" :key="operator.id" class="operator"><el-image class="operator-avatar" :src="'https://yubo.run/assets/arknights/operator-avatars/' + encodeURIComponent(operator.id) + '.png'" :alt="operator.name + '头像'" fit="contain"><template #error><div class="avatar-fallback" role="img" :aria-label="operator.name + '头像暂缺'">暂无头像</div></template></el-image><strong>{{ operator.name }}</strong><span>{{ operator.rarity }} 星 · {{ operator.job }}</span><el-button class="return-button" :disabled="!drawnIds.has(operator.id)" @click="returnOperator(operator)">{{ drawnIds.has(operator.id) ? '放回' : '已放回' }}</el-button></div></div>
       </el-card>
-      <el-card shadow="never">
-        <template #header><div class="card-heading"><h2>抽取记录</h2><el-button :disabled="!state.history.length" @click="undo">撤销最近一次</el-button></div></template>
-        <el-empty v-if="!state.history.length" description="还没有抽取记录"></el-empty>
-        <article v-for="(batch, index) in reversedHistory" :key="batch.sequence" class="batch"><div class="batch-heading"><strong>第 {{ state.history.length - index }} 次 · {{ batch.operators.length }} 位</strong><time>{{ formatTime(batch.time) }}</time></div><p>{{ batch.operators.map(operator => operator.name).join('、') }}</p><small>抽取前候选 {{ batch.candidateIds.length }} 位</small></article>
+      <el-card shadow="never" :body-style="historyExpanded ? {} : { display: 'none' }">
+        <template #header><div class="card-heading"><h2>操作记录</h2><div><el-button :disabled="!state.history.length" @click="undo">撤销最近操作</el-button><el-button :aria-expanded="historyExpanded" aria-controls="operation-history" @click="historyExpanded = !historyExpanded">{{ historyExpanded ? '收起' : '展开' }}</el-button></div></div></template>
+        <div id="operation-history">
+        <el-empty v-if="!state.history.length" description="还没有操作记录"></el-empty>
+        <article v-for="(batch, index) in reversedHistory" :key="batch.sequence" class="batch"><div class="batch-heading"><strong>第 {{ state.history.length - index }} 条 · {{ batch.type === 'return' ? '放回' : '抽取' }} · {{ batch.operators.length }} 位</strong><time>{{ formatTime(batch.time) }}</time></div><p>{{ batch.operators.map(operator => operator.name).join('、') }}</p><small v-if="batch.type === 'draw'">抽取前候选 {{ batch.candidateIds.length }} 位</small></article>
+        </div>
       </el-card>
     </div>
   </section>
+  <el-dialog v-model="operatorDialogVisible" :title="operatorDialogKind === 'drawn' ? '当前已抽出' : '剩余候选'" width="min(900px, 94vw)" append-to-body class="operator-dialog">
+    <div class="dialog-operators">
+      <el-empty v-if="!dialogOperators.length" :description="operatorDialogKind === 'drawn' ? '当前没有已抽出的干员' : '没有剩余候选干员'"></el-empty>
+      <div v-else class="results">
+        <div v-for="operator in dialogOperators" :key="operator.id" class="operator">
+          <el-image class="operator-avatar" :src="'https://yubo.run/assets/arknights/operator-avatars/' + encodeURIComponent(operator.id) + '.png'" :alt="operator.name + '头像'" fit="contain" loading="lazy"><template #error><div class="avatar-fallback" role="img" :aria-label="operator.name + '头像暂缺'">暂无头像</div></template></el-image>
+          <strong>{{ operator.name }}</strong><span>{{ operator.rarity }} 星 · {{ operator.job }}</span>
+          <el-button v-if="operatorDialogKind === 'drawn'" class="return-button" @click="returnOperator(operator)">放回</el-button>
+        </div>
+      </div>
+    </div>
+    <template #footer><el-button @click="operatorDialogVisible = false">关闭</el-button></template>
+  </el-dialog>
   <footer>数据来自 arknights-dictionary。记录仅保存在当前浏览器，清除浏览器数据会丢失。</footer>
 </main>
 <div id="startup">正在加载页面资源；若长时间未显示，请检查网络后刷新。</div>

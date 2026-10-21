@@ -12,6 +12,9 @@
 body { margin: 0; }
 body, button, input, select, textarea, code, pre { font-family: var(--picker-font-family); }
 html { min-height: 100%; }
+/* Keep the shared Matrix scanlines above Element Plus overlays without intercepting clicks. */
+html.dark[data-page-style="wei-matrix"] body::before { z-index: 2147483646; pointer-events: none; }
+html.dark[data-page-style="wei-matrix"] body::after { z-index: 2147483647; pointer-events: none; }
 button, [role="button"], .el-button, .el-checkbox, .el-radio, .el-select-dropdown__item { -webkit-user-select: none; user-select: none; }
 input, textarea { -webkit-user-select: text; user-select: text; }
 .el-popper, .el-dialog, .el-message, .el-message-box, .el-notification { font-family: var(--picker-font-family); border-radius: 0; }
@@ -35,9 +38,18 @@ p { line-height: 1.7; }
 .draw-controls { display: flex; gap: 14px; align-items: center; }
 .results { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin: 24px 0; }
 .operator { padding: 20px 14px; border: 1px solid var(--el-border-color); background: var(--el-fill-color-light); color: var(--el-text-color-primary); }
+.operator-avatar { display: block; width: 80px; height: 80px; margin-bottom: 12px; background: var(--el-fill-color); }
+.avatar-fallback { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; color: var(--el-text-color-secondary); font-size: 12px; }
 .operator strong, .operator span { display: block; }
 .operator span { font-size: 12px; color: var(--el-text-color-secondary); margin-top: 8px; }
-.candidate-list { display: flex; flex-wrap: wrap; gap: 8px; max-height: 320px; overflow: auto; }
+.return-button { margin-top: 12px; }
+.count-button { padding: 8px 12px; border: 1px solid var(--el-border-color); background: var(--el-fill-color-light); color: var(--el-text-color-regular); font: inherit; cursor: pointer; }
+.count-button:hover { border-color: var(--el-color-primary); }
+.count-button:focus-visible { outline: 2px solid var(--el-color-primary); outline-offset: 2px; }
+.operator-dialog { border-radius: 0; }
+.dialog-operators { max-height: 65vh; overflow-y: auto; }
+.dialog-operators .results { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); margin: 0; }
+@media (max-width: 480px) { .counts { gap: 8px; } .count-button { padding: 8px; } }
 .card-heading, .batch-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
 .batch { padding: 16px 0; border-bottom: 1px solid var(--el-border-color-lighter); }
 .batch:last-child { border-bottom: 0; }
